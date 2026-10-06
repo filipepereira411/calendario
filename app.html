@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calendário de Eventos Multidias</title>
+    <style>
+        :root {
+            --primary: #4f46e5;
+            --primary-hover: #4338ca;
+            --bg-range: #e0e7ff;
+            --text: #1f2937;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background-color: #f3f4f6;
+            color: var(--text);
+            display: flex;
+            justify-content: center;
+            padding: 2rem;
+            margin: 0;
+        }
+
+        .calendar-container {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            max-width: 400px;
+            width: 100%;
+        }
+
+        .calendar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            font-weight: bold;
+            font-size: 1.2rem;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 4px;
+            text-align: center;
+        }
+
+        .day-name {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: #6b7280;
+            padding: 8px 0;
+        }
+
+        .day {
+            padding: 10px 0;
+            font-size: 0.9rem;
+            border-radius: 6px;
+            cursor: pointer;
+            user-select: none;
+            transition: all 0.2s;
+        }
+
+        .day:hover:not(.empty) {
+            background-color: #f3f4f6;
+        }
+
+        /* Estados de Seleção */
+        .day.selected {
+            background-color: var(--primary) !important;
+            color: white;
+        }
+
+        .day.in-range {
+            background-color: var(--bg-range);
+            border-radius: 0;
+        }
+
+        .empty {
+            cursor: default;
+        }
+
+        /* Formulário de Evento */
+        .event-form {
+            margin-top: 1.5rem;
+            border-top: 1px solid #e5e7eb;
+            padding-top: 1rem;
+        }
+
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .form-group input, .form-group textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            box-sizing: border-box;
+            font-family: inherit;
+        }
+
+        .btn {
+            width: 100%;
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            padding: 10px;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .btn:hover {
+            background-color: var(--primary-hover);
+        }
+    </style>
+</head>
+<body>
+
+<div class="calendar-container">
+    <div class="calendar-header">
+        <span>Outubro 2026</span>
+    </div>
+
+    <!-- Dias da Semana -->
+    <div class="grid">
+        <div class="day-name">Dom</div>
+        <div class="day-name">Seg</div>
+        <div class="day-name">Ter</div>
+        <div class="day-name">Qua</div>
+        <div class="day-name">Qui</div>
+        <div class="day-name">Sex</div>
+        <div class="day-name">Sáb</div>
+    </div>
+
+    <!-- Dias do Mês (Outubro 2026 começa numa Quinta-feira) -->
+    <div class="grid" id="days-grid">
+        <!-- Espaços vazios para começar na quinta -->
+        <div class="day empty"></div>
+        <div class="day empty"></div>
+        <div class="day empty"></div>
+        <div class="day empty"></div>
+        
+        <!-- Dias 1 a 31 -->
+        <!-- Gerados via JavaScript para manter o código limpo e funcional -->
+    </div>
+
+    <!-- Formulário do Evento -->
+    <div class="event-form">
+        <div class="form-group">
+            <label for="event-title">Nome do Evento</label>
+            <input type="text" id="event-title" placeholder="Ex: Férias, Viagem de Trabalho...">
+        </div>
+        
+        <div class="form-group">
+            <label>Datas Selecionadas</label>
+            <input type="text" id="event-dates" readonly placeholder="Clique em duas datas no calendário">
+        </div>
+
+        <button class="btn" onclick="saveEvent()">Guardar Evento</button>
+    </div>
+</div>
+
+<script>
+    const daysGrid = document.getElementById('days-grid');
+    const datesInput = document.getElementById('event-dates');
+    
+    let startDate = null;
+    let endDate = null;
+
+    // Criar os 31 dias de Outubro
+    for (let i = 1; i <= 31; i++) {
+        const dayElement = document.createElement('div');
+        dayElement.classList.add('day');
+        dayElement.textContent = i;
+        dayElement.dataset.day = i;
+        
+        dayElement.addEventListener('click', () => handleDateClick(i));
+        daysGrid.appendChild(dayElement);
+    }
+
+    function handleDateClick(day) {
+        if (!startDate || (startDate && endDate)) {
+            // Primeiro clique ou reiniciar seleção
+            startDate = day;
+            endDate = null;
+        } else if (day >= startDate) {
+            // Segundo clique (data final válida)
+            endDate = day;
+        } else {
+            // Se clicar num dia anterior ao de início, reseta o início
+            startDate = day;
+        }
+
+        updateCalendarUI();
+    }
+
+    function updateCalendarUI() {
+        const allDays = document.querySelectorAll('.day:not(.empty)');
+        
+        allDays.forEach(dayEl => {
+            const day = parseInt(dayEl.dataset.day);
+            dayEl.classList.remove('selected', 'in-range');
+
+            if (day === startDate || day === endDate) {
+                dayEl.classList.add('selected');
+            } else if (startDate && endDate && day > startDate && day < endDate) {
+                dayEl.classList.add('in-range');
+            }
+        });
+
+        // Atualizar o texto do input
+        if (startDate && endDate) {
+            datesInput.value = `De ${startDate} a ${endDate} de Outubro`;
+        } else if (startDate) {
+            datesInput.value = `Dia ${startDate} de Outubro`;
+        } else {
+            datesInput.value = '';
+        }
+    }
+
+    function saveEvent() {
+        const title = document.getElementById('event-title').value;
+        if (!title || !startDate) {
+            alert('Por favor, preenche o nome do evento e escolhe pelo menos uma data.');
+            return;
+        }
+        
+        alert(`Evento "${title}" guardado com sucesso para as datas: ${datesInput.value}!`);
+    }
+</script>
+
+</body>
+</html>
