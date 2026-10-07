@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Calendário Nativo - Seleção Múltipla</title>
+  <title>Calendário Nativo - Seleção por Intervalo</title>
   <style>
     :root {
       --bg: #f3f4f6;
@@ -15,7 +15,7 @@
       --muted: #6b7280;
       --danger: #ef4444;
     }
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; user-select: none; }
     body { background: var(--bg); color: var(--text); padding: 20px; display: flex; gap: 20px; height: 100vh; }
     
     .cal-container { flex: 1; background: var(--surface); border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); padding: 20px; display: flex; flex-direction: column; }
@@ -27,12 +27,12 @@
     .weekdays { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; font-weight: 600; color: var(--muted); margin-bottom: 10px; }
     .days-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; flex: 1; }
     
-    .day { background: var(--bg); border-radius: 8px; padding: 8px; min-height: 70px; cursor: pointer; display: flex; flex-direction: column; justify-content: space-between; border: 2px solid transparent; transition: all 0.15s ease; }
+    .day { background: var(--bg); border-radius: 8px; padding: 8px; min-height: 70px; cursor: pointer; display: flex; flex-direction: column; justify-content: space-between; border: 2px solid transparent; transition: background 0.1s ease; }
     .day:hover { border-color: var(--primary); }
     .day.empty { background: transparent; cursor: default; border: none; }
     .day.today { background: #e0e7ff; color: #4338ca; font-weight: 700; border-color: #c7d2fe; }
     
-    /* Novo estilo para dias selecionados */
+    /* Destaque para os dias selecionados no intervalo */
     .day.selected { background: var(--primary); color: white; border-color: var(--primary); }
     .day.selected .dot { background: white; }
     .day.selected .day-number { font-weight: bold; }
@@ -75,19 +75,22 @@
     <h3 id="selectedDateTitle">0 dias selecionados</h3>
     <button id="clearBtn" class="clear-selection" onclick="clearSelection()" style="display: none;">Limpar seleção</button>
     
-    <div class="event-list" id="eventList">Selecione dias para ver ou gerir eventos.</div>
+    <div class="event-list" id="eventList">Arraste o rato sobre os dias para selecionar um intervalo.</div>
     
     <hr style="border: 0; border-top: 1px solid var(--border);">
-    <h4>Adicionar Evento nos Dias Selecionados</h4>
+    <h4>Adicionar Evento no Intervalo</h4>
     <input type="text" id="eventTitle" placeholder="Título do evento">
     <button class="btn-block" onclick="saveEvent()">Guardar Evento</button>
   </div>
 
   <script>
     let currentDate = new Date();
-    // Agora guardamos uma lista (Array) de datas selecionadas
     let selectedDates = []; 
     let events = JSON.parse(localStorage.getItem('cal_events') || '{}');
+
+    // Variáveis de controlo para o arrastamento do rato
+    let isDragging = false;
+    let dragStartId = null;
 
     const months = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 
@@ -115,12 +118,12 @@
         dayDiv.classList.add('day');
         
         const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        dayDiv.dataset.date = dateStr; // Guarda a data no elemento para o rato detetar
         
         if (day === today.getDate() && month === today.getMonth() && year === today.getFullYear()) {
           dayDiv.classList.add('today');
         }
 
-        // Mantém o estado visual se o dia já estiver selecionado
         if (selectedDates.includes(dateStr)) {
           dayDiv.classList.add('selected');
         }
@@ -138,30 +141,74 @@
           dayDiv.appendChild(dotsContainer);
         }
 
-        dayDiv.onclick = () => toggleDateSelection(dateStr);
+        // --- Eventos do Rato para Arrastar e Selecionar ---
+        dayDiv.onmousedown = (e) => {
+          isDragging = true;
+          dragStartId = dateStr;
+          
+          if (e.shiftKey && selectedDates.length > 0) {
+            // Suporte para Shift + Clique
+            selectRange(selectedDates[0], dateStr);
+          } else {
+            selectedDates = [dateStr];
+            renderCalendar();
+            updateSidebar();
+          }
+        };
+
+        dayDiv.onmouseenter = () => {
+          if (isDragging && dragStartId) {
+            selectRange(dragStartId, dateStr);
+          }
+        };
+
         container.appendChild(dayDiv);
       }
+    }
+
+    // Cancela o arrastamento se o utilizador largar o clique em qualquer parte da página
+    window.onmouseup = () => {
+      isDragging = false;
+    };
+
+    // Gera a lista de todas as datas entre o início e o fim do arrastamento
+    function selectRange(startStr, endStr) {
+      const startDate = new Date(startStr);
+      const endDate = new Date(endStr);
+      
+      // Garante que funciona mesmo que arrastes de trás para a frente
+      const minDate = startDate < endDate ? startDate : endDate;
+      const maxDate = startDate < endDate ? endDate : startDate;
+      
+      const range = [];
+      let current = new Date(minDate);
+      
+      while (current <= maxDate) {
+        const y = current.getFullYear();
+        const m = String(current.getMonth() + 1).padStart(2, '0');
+        const d = String(current.getDate()).padStart(2, '0');
+        range.push(`${y}-${m}-${d}`);
+        current.setDate(current.getDate() + 1);
+      }
+      
+      selectedDates = range;
+      
+      // Atualiza as classes visualmente de forma rápida sem reconstruir o DOM todo
+      const days = document.querySelectorAll('.day:not(.empty)');
+      days.forEach(dayDiv => {
+        if (selectedDates.includes(dayDiv.dataset.date)) {
+          dayDiv.classList.add('selected');
+        } else {
+          dayDiv.classList.remove('selected');
+        }
+      });
+      
+      updateSidebar();
     }
 
     function changeMonth(direction) {
       currentDate.setMonth(currentDate.getMonth() + direction);
       renderCalendar();
-    }
-
-    // Altera a seleção de um dia (adiciona se não existir, remove se já lá estiver)
-    function toggleDateSelection(dateStr) {
-      const index = selectedDates.indexOf(dateStr);
-      if (index > -1) {
-        selectedDates.splice(index, 1);
-      } else {
-        selectedDates.push(dateStr);
-      }
-      
-      // Ordena as datas para a lista lateral ficar organizada
-      selectedDates.sort();
-      
-      renderCalendar();
-      updateSidebar();
     }
 
     function clearSelection() {
@@ -178,7 +225,7 @@
       if (selectedDates.length === 0) {
         title.textContent = "0 dias selecionados";
         clearBtn.style.display = "none";
-        list.innerHTML = 'Selecione dias para ver ou gerir eventos.';
+        list.innerHTML = 'Arraste o rato sobre os dias para selecionar um intervalo.';
         return;
       }
 
@@ -188,56 +235,3 @@
       
       let hasEvents = false;
 
-      // Mostra os eventos consolidados de todos os dias selecionados
-      selectedDates.forEach(dateStr => {
-        if (events[dateStr] && events[dateStr].length > 0) {
-          hasEvents = true;
-          const [y, m, d] = dateStr.split('-');
-          const shortDate = `${d}/${m}`;
-
-          events[dateStr].forEach((ev, index) => {
-            const item = document.createElement('div');
-            item.classList.add('event-item');
-            
-            item.innerHTML = `
-              <div>
-                <span class="event-date-label">${shortDate}</span>
-                <span>${ev.title}</span>
-              </div>
-              <button class="delete-btn" onclick="deleteEvent('${dateStr}', ${index})">🗑️</button>
-            `;
-            list.appendChild(item);
-          });
-        }
-      });
-
-      if (!hasEvents) {
-        list.textContent = 'Nenhum evento agendado para estes dias.';
-      }
-    }
-
-    function saveEvent() {
-      const titleInput = document.getElementById('eventTitle');
-      if (selectedDates.length === 0) { alert('Por favor, seleciona pelo menos um dia.'); return; }
-      if (!titleInput.value.trim()) return;
-
-      // Adiciona o mesmo evento a todos os dias selecionados
-      selectedDates.forEach(dateStr => {
-        if (!events[dateStr]) events[dateStr] = [];
-        events[dateStr].push({ title: titleInput.value.trim() });
-      });
-      
-      localStorage.setItem('cal_events', JSON.stringify(events));
-      titleInput.value = '';
-      
-      renderCalendar();
-      updateSidebar();
-    }
-
-    function deleteEvent(dateStr, index) {
-      events[dateStr].splice(index, 1);
-
-    renderCalendar();
-  </script>
-</body>
-</html>
