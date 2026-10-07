@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Calendário Nativo</title>
+  <title>Calendário Nativo - Seleção Múltipla</title>
   <style>
     :root {
       --bg: #f3f4f6;
@@ -27,25 +27,34 @@
     .weekdays { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; font-weight: 600; color: var(--muted); margin-bottom: 10px; }
     .days-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; flex: 1; }
     
-    .day { background: var(--bg); border-radius: 8px; padding: 8px; min-height: 70px; cursor: pointer; display: flex; flex-direction: column; justify-content: space-between; border: 2px solid transparent; }
+    .day { background: var(--bg); border-radius: 8px; padding: 8px; min-height: 70px; cursor: pointer; display: flex; flex-direction: column; justify-content: space-between; border: 2px solid transparent; transition: all 0.15s ease; }
     .day:hover { border-color: var(--primary); }
     .day.empty { background: transparent; cursor: default; border: none; }
-    .day.today { background: var(--primary-light); color: var(--primary); font-weight: 700; }
+    .day.today { background: #e0e7ff; color: #4338ca; font-weight: 700; border-color: #c7d2fe; }
+    
+    /* Novo estilo para dias selecionados */
+    .day.selected { background: var(--primary); color: white; border-color: var(--primary); }
+    .day.selected .dot { background: white; }
+    .day.selected .day-number { font-weight: bold; }
+
     .day-number { font-size: 14px; }
     .event-dots { display: flex; gap: 4px; flex-wrap: wrap; }
     .dot { width: 6px; height: 6px; background: var(--primary); border-radius: 50%; }
 
-    .sidebar { width: 300px; background: var(--surface); border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); padding: 20px; display: flex; flex-direction: column; gap: 15px; }
+    .sidebar { width: 320px; background: var(--surface); border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); padding: 20px; display: flex; flex-direction: column; gap: 15px; }
     .sidebar h3 { font-size: 18px; }
-    input, textarea { width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 6px; outline: none; }
+    input { width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 6px; outline: none; }
     button.btn-block { width: 100%; background: var(--primary); color: white; border: none; padding: 10px; border-radius: 6px; font-weight: 600; cursor: pointer; }
     button.btn-block:hover { background: #1d4ed8; }
-    .event-list { flex: 1; overflow-y: auto; font-size: 14px; }
+    .event-list { flex: 1; overflow-y: auto; font-size: 14px; max-height: 250px; }
     
-    /* Alterações para o botão de apagar */
-    .event-item { padding: 8px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+    .event-item { padding: 8px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+    .event-date-label { font-size: 11px; color: var(--muted); display: block; }
     .delete-btn { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 16px; padding: 2px 6px; border-radius: 4px; }
     .delete-btn:hover { color: var(--danger); background: #fee2e2; }
+    
+    .clear-selection { background: none; border: 1px dashed var(--muted); color: var(--muted); padding: 6px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 500; text-align: center; }
+    .clear-selection:hover { background: var(--bg); color: var(--text); }
   </style>
 </head>
 <body>
@@ -63,17 +72,21 @@
   </div>
 
   <div class="sidebar">
-    <h3 id="selectedDateTitle">Seleciona um dia</h3>
-    <div class="event-list" id="eventList">Nenhum evento para este dia.</div>
+    <h3 id="selectedDateTitle">0 dias selecionados</h3>
+    <button id="clearBtn" class="clear-selection" onclick="clearSelection()" style="display: none;">Limpar seleção</button>
+    
+    <div class="event-list" id="eventList">Selecione dias para ver ou gerir eventos.</div>
+    
     <hr style="border: 0; border-top: 1px solid var(--border);">
-    <h4>Adicionar Evento</h4>
+    <h4>Adicionar Evento nos Dias Selecionados</h4>
     <input type="text" id="eventTitle" placeholder="Título do evento">
     <button class="btn-block" onclick="saveEvent()">Guardar Evento</button>
   </div>
 
   <script>
     let currentDate = new Date();
-    let selectedDateStr = "";
+    // Agora guardamos uma lista (Array) de datas selecionadas
+    let selectedDates = []; 
     let events = JSON.parse(localStorage.getItem('cal_events') || '{}');
 
     const months = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
@@ -101,11 +114,15 @@
         const dayDiv = document.createElement('div');
         dayDiv.classList.add('day');
         
-        // Correção para fuso horário local ao criar a string da data
         const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
         
         if (day === today.getDate() && month === today.getMonth() && year === today.getFullYear()) {
           dayDiv.classList.add('today');
+        }
+
+        // Mantém o estado visual se o dia já estiver selecionado
+        if (selectedDates.includes(dateStr)) {
+          dayDiv.classList.add('selected');
         }
 
         dayDiv.innerHTML = `<span class="day-number">${day}</span>`;
@@ -121,7 +138,7 @@
           dayDiv.appendChild(dotsContainer);
         }
 
-        dayDiv.onclick = () => selectDate(dateStr);
+        dayDiv.onclick = () => toggleDateSelection(dateStr);
         container.appendChild(dayDiv);
       }
     }
@@ -131,60 +148,94 @@
       renderCalendar();
     }
 
-    function selectDate(dateStr) {
-      selectedDateStr = dateStr;
-      // Ajuste para evitar problemas de fuso horário na visualização do título
-      const [y, m, d] = dateStr.split('-');
-      const formattedDate = new Date(y, m - 1, d).toLocaleDateString('pt-PT', { day: 'numeric', month: 'long', year: 'numeric' });
-      document.getElementById('selectedDateTitle').textContent = formattedDate;
+    // Altera a seleção de um dia (adiciona se não existir, remove se já lá estiver)
+    function toggleDateSelection(dateStr) {
+      const index = selectedDates.indexOf(dateStr);
+      if (index > -1) {
+        selectedDates.splice(index, 1);
+      } else {
+        selectedDates.push(dateStr);
+      }
       
+      // Ordena as datas para a lista lateral ficar organizada
+      selectedDates.sort();
+      
+      renderCalendar();
+      updateSidebar();
+    }
+
+    function clearSelection() {
+      selectedDates = [];
+      renderCalendar();
+      updateSidebar();
+    }
+
+    function updateSidebar() {
+      const title = document.getElementById('selectedDateTitle');
+      const clearBtn = document.getElementById('clearBtn');
       const list = document.getElementById('eventList');
+      
+      if (selectedDates.length === 0) {
+        title.textContent = "0 dias selecionados";
+        clearBtn.style.display = "none";
+        list.innerHTML = 'Selecione dias para ver ou gerir eventos.';
+        return;
+      }
+
+      title.textContent = `${selectedDates.length} dia(s) selecionado(s)`;
+      clearBtn.style.display = "block";
       list.innerHTML = '';
       
-      if (events[dateStr] && events[dateStr].length > 0) {
-        events[dateStr].forEach((ev, index) => {
-          const item = document.createElement('div');
-          item.classList.add('event-item');
-          
-          item.innerHTML = `
-            <span>${ev.title}</span>
-            <button class="delete-btn" onclick="deleteEvent('${dateStr}', ${index})">🗑️</button>
-          `;
-          list.appendChild(item);
-        });
-      } else {
-        list.textContent = 'Nenhum evento para este dia.';
+      let hasEvents = false;
+
+      // Mostra os eventos consolidados de todos os dias selecionados
+      selectedDates.forEach(dateStr => {
+        if (events[dateStr] && events[dateStr].length > 0) {
+          hasEvents = true;
+          const [y, m, d] = dateStr.split('-');
+          const shortDate = `${d}/${m}`;
+
+          events[dateStr].forEach((ev, index) => {
+            const item = document.createElement('div');
+            item.classList.add('event-item');
+            
+            item.innerHTML = `
+              <div>
+                <span class="event-date-label">${shortDate}</span>
+                <span>${ev.title}</span>
+              </div>
+              <button class="delete-btn" onclick="deleteEvent('${dateStr}', ${index})">🗑️</button>
+            `;
+            list.appendChild(item);
+          });
+        }
+      });
+
+      if (!hasEvents) {
+        list.textContent = 'Nenhum evento agendado para estes dias.';
       }
     }
 
     function saveEvent() {
       const titleInput = document.getElementById('eventTitle');
-      if (!selectedDateStr) { alert('Por favor, seleciona um dia primeiro.'); return; }
+      if (selectedDates.length === 0) { alert('Por favor, seleciona pelo menos um dia.'); return; }
       if (!titleInput.value.trim()) return;
 
-      if (!events[selectedDateStr]) events[selectedDateStr] = [];
-      events[selectedDateStr].push({ title: titleInput.value.trim() });
+      // Adiciona o mesmo evento a todos os dias selecionados
+      selectedDates.forEach(dateStr => {
+        if (!events[dateStr]) events[dateStr] = [];
+        events[dateStr].push({ title: titleInput.value.trim() });
+      });
       
       localStorage.setItem('cal_events', JSON.stringify(events));
       titleInput.value = '';
       
       renderCalendar();
-      selectDate(selectedDateStr);
+      updateSidebar();
     }
 
-    // Nova função para apagar o evento
     function deleteEvent(dateStr, index) {
       events[dateStr].splice(index, 1);
-      
-      // Se não sobrarem eventos nesse dia, remove a chave para limpar o objeto
-      if (events[dateStr].length === 0) {
-        delete events[dateStr];
-      }
-      
-      localStorage.setItem('cal_events', JSON.stringify(events));
-      renderCalendar();
-      selectDate(dateStr);
-    }
 
     renderCalendar();
   </script>
