@@ -3,7 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Calendário Nativo</title>
+  <title>Calendário Nativo com Notificações por Email</title>
+  <!-- Inclusão da API oficial do EmailJS -->
+  <script type="text/javascript" src="https://jsdelivr.net"></script>
   <style>
     :root {
       --bg: #f3f4f6;
@@ -40,12 +42,17 @@
     input, textarea { width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 6px; outline: none; }
     button.btn-block { width: 100%; background: var(--primary); color: white; border: none; padding: 10px; border-radius: 6px; font-weight: 600; cursor: pointer; }
     button.btn-block:hover { background: #1d4ed8; }
+    
+    button.btn-notif { width: 100%; background: transparent; color: var(--primary); border: 1px solid var(--primary); padding: 8px; border-radius: 6px; font-weight: 600; cursor: pointer; }
+    button.btn-notif:hover { background: var(--primary-light); }
+
     .event-list { flex: 1; overflow-y: auto; font-size: 14px; }
     
-    /* Alterações para o botão de apagar */
     .event-item { padding: 8px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
     .delete-btn { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 16px; padding: 2px 6px; border-radius: 4px; }
     .delete-btn:hover { color: var(--danger); background: #fee2e2; }
+    
+    label { font-size: 12px; font-weight: 600; color: var(--muted); display: block; margin-bottom: -10px; }
   </style>
 </head>
 <body>
@@ -63,30 +70,88 @@
   </div>
 
   <div class="sidebar">
+    <button class="btn-notif" onclick="requestNotificationPermission()">Permitir Notificações no PC 🔔</button>
+    <hr style="border: 0; border-top: 1px solid var(--border); margin: 5px 0;">
+    
     <h3 id="selectedDateTitle">Seleciona um dia</h3>
     <div class="event-list" id="eventList">Nenhum evento para este dia.</div>
     <hr style="border: 0; border-top: 1px solid var(--border);">
+    
     <h4>Adicionar Evento</h4>
+    
+    <label for="userEmail">O teu Email (para aviso):</label>
+    <input type="email" id="userEmail" placeholder="exemplo@email.com">
+    
+    <label for="eventTitle">O que vais fazer:</label>
     <input type="text" id="eventTitle" placeholder="Título do evento">
+    
     <button class="btn-block" onclick="saveEvent()">Guardar Evento</button>
   </div>
 
   <script>
+    // ==========================================
+    // CONFIGURAÇÃO DO EMAILJS INTEGRADA 
+    // ==========================================
+    const EMAILJS_PUBLIC_KEY = "XEhKqkzMY2YNOjMV0"; 
+    const EMAILJS_SERVICE_ID = "service_mo0p8cd";
+    const EMAILJS_TEMPLATE_ID = "template_x8phnqk";
+
+    // Inicializa o EmailJS automaticamente com a tua chave pública
+    (function() {
+      emailjs.init(EMAILJS_PUBLIC_KEY);
+    })();
+
     let currentDate = new Date();
     let selectedDateStr = "";
     let events = JSON.parse(localStorage.getItem('cal_events') || '{}');
 
+    // Recupera o email guardado automaticamente no browser para não teres de repetir
+    if(localStorage.getItem('cal_user_email')) {
+      document.getElementById('userEmail').value = localStorage.getItem('cal_user_email');
+    }
+
     const months = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+
+    function requestNotificationPermission() {
+      if (!("Notification" in window)) return;
+      Notification.requestPermission().then(permission => {
+        if (permission === "granted") {
+          sendSystemNotification("Notificações Prontas!", "Alertas locais do sistema ativados.");
+        }
+      });
+    }
+
+    function sendSystemNotification(title, message) {
+      if (Notification.permission === "granted") {
+        new Notification(title, { body: message });
+      } else {
+        alert(`🔔 Alerta: ${title}\n${message}`);
+      }
+    }
+
+    // Envia o email real chamando a API com os teus IDs
+    function enviarNotificacaoEmail(destinatario, dataEvento, tituloEvento) {
+      const templateParams = {
+        to_email: destinatario,
+        event_date: dataEvento,
+        event_title: tituloEvento
+      };
+
+      emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, templateParams)
+        .then(function(response) {
+           console.log('Sucesso! Notificação enviada para o e-mail.', response.status, response.text);
+        }, function(error) {
+           console.error('Erro ao enviar e-mail via EmailJS:', error);
+        });
+    }
 
     function renderCalendar() {
       const year = currentDate.getFullYear();
       const month = currentDate.getMonth();
-      
       document.getElementById('monthTitle').textContent = `${months[month]} ${year}`;
       
       const firstDayIndex = new Date(year, month, 1).getDay();
       const lastDay = new Date(year, month + 1, 0).getDate();
-      
       const container = document.getElementById('daysContainer');
       container.innerHTML = '';
 
@@ -100,8 +165,6 @@
       for (let day = 1; day <= lastDay; day++) {
         const dayDiv = document.createElement('div');
         dayDiv.classList.add('day');
-        
-        // Correção para fuso horário local ao criar a string da data
         const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
         
         if (day === today.getDate() && month === today.getMonth() && year === today.getFullYear()) {
@@ -133,7 +196,6 @@
 
     function selectDate(dateStr) {
       selectedDateStr = dateStr;
-      // Ajuste para evitar problemas de fuso horário na visualização do título
       const [y, m, d] = dateStr.split('-');
       const formattedDate = new Date(y, m - 1, d).toLocaleDateString('pt-PT', { day: 'numeric', month: 'long', year: 'numeric' });
       document.getElementById('selectedDateTitle').textContent = formattedDate;
@@ -145,11 +207,7 @@
         events[dateStr].forEach((ev, index) => {
           const item = document.createElement('div');
           item.classList.add('event-item');
-          
-          item.innerHTML = `
-            <span>${ev.title}</span>
-            <button class="delete-btn" onclick="deleteEvent('${dateStr}', ${index})">🗑️</button>
-          `;
+          item.innerHTML = `<span>${ev.title}</span><button class="delete-btn" onclick="deleteEvent('${dateStr}', ${index})">🗑️</button>`;
           list.appendChild(item);
         });
       } else {
@@ -159,34 +217,7 @@
 
     function saveEvent() {
       const titleInput = document.getElementById('eventTitle');
+      const emailInput = document.getElementById('userEmail');
+      
       if (!selectedDateStr) { alert('Por favor, seleciona um dia primeiro.'); return; }
-      if (!titleInput.value.trim()) return;
-
-      if (!events[selectedDateStr]) events[selectedDateStr] = [];
-      events[selectedDateStr].push({ title: titleInput.value.trim() });
       
-      localStorage.setItem('cal_events', JSON.stringify(events));
-      titleInput.value = '';
-      
-      renderCalendar();
-      selectDate(selectedDateStr);
-    }
-
-    // Nova função para apagar o evento
-    function deleteEvent(dateStr, index) {
-      events[dateStr].splice(index, 1);
-      
-      // Se não sobrarem eventos nesse dia, remove a chave para limpar o objeto
-      if (events[dateStr].length === 0) {
-        delete events[dateStr];
-      }
-      
-      localStorage.setItem('cal_events', JSON.stringify(events));
-      renderCalendar();
-      selectDate(dateStr);
-    }
-
-    renderCalendar();
-  </script>
-</body>
-</html>
